@@ -8,23 +8,6 @@ from ftplib import FTP
 from functools import partial
 from http import HTTPStatus
 
-
-class FTPClient:
-    def __init__(self, host, user, password):
-        self.ftp = FTP(host)
-        self.ftp.login(user, password)
-
-    def download(self, remote_file, local_file):
-        with open(local_file, 'wb') as f:
-            self.ftp.retrbinary('RETR ' + remote_file, f.write)
-
-    def upload(self, local_file, remote_file):
-        with open(local_file, 'rb') as f:
-            self.ftp.storbinary('STOR ' + remote_file, f)
-
-    def close(self):
-        self.ftp.quit()
-
 class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     def __init__(self, *args, ftp_host=None, ftp_port=21, **kwargs):
         if ftp_host is None:
@@ -39,14 +22,19 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self.ftp.login()
 
     def do_GET(self):
+        if self.path == '/favicon.ico':
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
         try:
             self.ftp.dir()
         except (ConnectionResetError , AttributeError) as ex:
             try:
                 self.connect()
             except TimeoutError:
-                self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR,
-                                'FTP connection timeout')
+                self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, 'FTP connection timeout')
+                return None
+            except OSError as ex:
+                self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(ex))
                 return None
         if self.path.endswith('/'):
             f = self.list_directory(self.path)
