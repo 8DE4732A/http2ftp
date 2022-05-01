@@ -32,12 +32,22 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self.ftp_host = ftp_host
         self.ftp_port = ftp_port
         self.ftp = FTP()
-        self.ftp.connect(self.ftp_host, self.ftp_port)
-        self.ftp.login()
         super().__init__(*args, **kwargs)
 
+    def connect(self):
+        self.ftp.connect(self.ftp_host, self.ftp_port, timeout=5)
+        self.ftp.login()
+
     def do_GET(self):
-        print(self.path)
+        try:
+            self.ftp.dir()
+        except (ConnectionResetError , AttributeError) as ex:
+            try:
+                self.connect()
+            except TimeoutError:
+                self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR,
+                                'FTP connection timeout')
+                return None
         if self.path.endswith('/'):
             f = self.list_directory(self.path)
             if f:
